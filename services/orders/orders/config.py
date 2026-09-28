@@ -13,6 +13,10 @@ class Settings(BaseSettings):
 
     service_name: str = "orders"
 
+    # По умолчанию — файл рядом с проектом, чтобы сервис запускался без Docker.
+    # В compose.yaml сюда подставляется адрес PostgreSQL.
+    database_url: str = "sqlite:///./orders.db"
+
     # Куда ходить за проверкой клиента.
     accounts_url: str = "http://localhost:8001"
 
