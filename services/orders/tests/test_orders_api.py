@@ -18,17 +18,21 @@ def test_create_order_returns_201(client, order_payload):
 
 
 @pytest.mark.parametrize(
-    "broken_field",
+    "payload",
     [
-        {"item": ""},
-        {"quantity": 0},
+        # пустой запрос: нет ни одного поля
         {},
+        # нет поля item
+        {"account_id": 1, "quantity": 2},
+        # нет поля quantity
+        {"account_id": 1, "item": "Кофемолка"},
+        # quantity меньше 1
+        {"account_id": 1, "item": "Кофемолка", "quantity": 0},
+        # item пустой
+        {"account_id": 1, "item": "", "quantity": 2},
     ],
 )
-def test_invalid_payload_returns_422(client, order_payload, broken_field):
-    payload = {key: value for key, value in order_payload.items() if key not in broken_field}
-    payload |= broken_field
-
+def test_invalid_payload_returns_422(client, payload):
     response = client.post("/orders", json=payload)
 
     assert response.status_code == 422
