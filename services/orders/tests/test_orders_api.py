@@ -1,31 +1,34 @@
-"""Заведомо падающий тест
-
-СЕЙЧАС ОН ПРОПУСКАЕТСЯ. Снимите строку со skip ниже, запустите проверки
-и убедитесь, что тест падает. Это нормальное и правильное состояние:
-сначала появляется тест, который описывает нужное поведение, и только
-потом — код, который заставляет его пройти.
-
+"""
+Тесты запросов к сервису заказов.
 """
 
 import pytest
-from fastapi.testclient import TestClient
-
-from orders.main import app
-
-# ↓↓↓ Уберите эту строку на занятии 2 ↓↓↓
-pytest.skip("Реализуется на занятии 2: снимите пропуск", allow_module_level=True)
-
-client = TestClient(app)
 
 
-def test_create_order_returns_201():
-    payload = {"account_id": 1, "item": "Кофемолка", "quantity": 2}
-
-    response = client.post("/orders", json=payload)
+def test_create_order_returns_201(client, order_payload):
+    response = client.post("/orders", json=order_payload)
 
     assert response.status_code == 201
     body = response.json()
     assert body["id"] > 0
-    assert body["account_id"] == payload["account_id"]
-    assert body["item"] == payload["item"]
-    assert body["quantity"] == payload["quantity"]
+    assert body["account_id"] == order_payload["account_id"]
+    assert body["item"] == order_payload["item"]
+    assert body["quantity"] == order_payload["quantity"]
+    assert body["created_at"]
+
+
+@pytest.mark.parametrize(
+    "broken_field",
+    [
+        {"item": ""},
+        {"quantity": 0},
+        {},
+    ],
+)
+def test_invalid_payload_returns_422(client, order_payload, broken_field):
+    payload = {key: value for key, value in order_payload.items() if key not in broken_field}
+    payload |= broken_field
+
+    response = client.post("/orders", json=payload)
+
+    assert response.status_code == 422
