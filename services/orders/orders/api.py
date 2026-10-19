@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from orders.accounts_client import ensure_account_exists
 from orders.db import get_session
 from orders.models import Order
 from orders.schemas import OrderCreate, OrderRead
@@ -33,6 +34,7 @@ def _get_or_404(session: Session, order_id: int) -> Order:
     summary="Создать заказ",
 )
 def create_order(payload: OrderCreate, session: Session = Depends(get_session)) -> Order:
+    ensure_account_exists(payload.account_id)
     order = Order(**payload.model_dump())
     session.add(order)
     session.commit()
