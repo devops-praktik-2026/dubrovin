@@ -8,7 +8,13 @@ from fastapi import FastAPI
 
 from orders.api import router
 from orders.config import settings
+from orders.db import Base, engine
 from orders.schemas import HealthRead
+
+# Миграций у сервиса заказов ещё нет, поэтому таблицы создаём по моделям
+# прямо при старте приложения: если таблиц нет — SQLAlchemy создаст их сам.
+# Вызов безопасен повтором: существующие таблицы не трогаются.
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Сервис заказов",
