@@ -48,3 +48,21 @@ def account_exists(monkeypatch):
     """Во всех тестах считаем, что сосед ответил 200 OK."""
     answer = httpx.Response(200, request=httpx.Request("GET", "http://accounts"))
     monkeypatch.setattr(httpx, "get", lambda url, timeout: answer)
+
+
+def make_hanging_get(delay_seconds: float):
+    """Заглушка httpx.get для «замороженного» соседа.
+
+    Спит дольше таймаута и только потом поднимает ReadTimeout — ровно так же,
+    как настоящий httpx ведёт себя при docker compose pause accounts.
+    """
+
+    def hanging_get(url, timeout):
+        import time
+
+        # Спим ровно столько, сколько сам запросил вызывающий код:
+        # так таймаут из settings имитируется честно.
+        time.sleep(max(delay_seconds, timeout))
+        raise httpx.ReadTimeout(f"timed out after {timeout}s", request=httpx.Request("GET", url))
+
+    return hanging_get
