@@ -2,8 +2,13 @@
 Тесты запросов к сервису заказов.
 """
 
+import time
+
 import httpx
 import pytest
+from conftest import make_hanging_get
+
+from orders.config import settings
 
 
 def test_create_order_returns_201(client, order_payload):
@@ -180,3 +185,48 @@ def test_order_for_missing_account_returns_404(client, order_payload, monkeypatc
     response = client.post("/orders", json=order_payload)
     assert response.status_code == 404
     assert "not found" in response.json()["detail"]
+
+
+def test_order_when_accounts_is_down_returns_503(client, order_payload, monkeypatch):
+    """Сосед погашен (docker compose stop accounts): соединение не устанавливается.
+
+    httpx поднимает ConnectError — our handler должен отдать 503 сразу,
+    а не 500 и не ждать минуту.
+    """
+
+    def refused_get(url, timeout):
+        raise httpx.ConnectError(
+            "all connection attempts failed", request=httpx.Request("GET", url)
+        )
+
+    monkeypatch.setattr(httpx, "get", refused_get)
+
+    started = time.monotonic()
+    response = client.post("/orders", json=order_payload)
+    waited = time.monotonic() - started
+
+    assert response.status_code == 503
+    assert "не отвечает" in response.json()["detail"]
+    # Ответ приходит почти мгновенно, а не после длинного системного таймаута.
+    assert waited < settings.accounts_timeout_seconds + 1
+
+
+def test_order_when_accounts_is_frozen_returns_503_after_timeout(
+    client, order_payload, monkeypatch
+):
+    """Сосед заморожен (docker compose pause accounts): запрос висит без ответа.
+
+    httpx прерывает ожидание по таймауту и поднимает ReadTimeout.
+    Проверяем, что 503 приходит ровно через accounts_timeout_seconds,
+    а не через минуту.
+    """
+    monkeypatch.setattr(httpx, "get", make_hanging_get(settings.accounts_timeout_seconds))
+
+    started = time.monotonic()
+    response = client.post("/orders", json=order_payload)
+    waited = time.monotonic() - started
+
+    assert response.status_code == 503
+    assert "не отвечает" in response.json()["detail"]
+    # Ждём ровно таймаут: ни сильно меньше (не оборвали раньше), ни минуты.
+    assert settings.accounts_timeout_seconds <= waited < settings.accounts_timeout_seconds * 2
