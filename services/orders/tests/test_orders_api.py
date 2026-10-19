@@ -2,6 +2,7 @@
 Тесты запросов к сервису заказов.
 """
 
+import httpx
 import pytest
 
 
@@ -168,3 +169,14 @@ def test_list_orders_bad_account_id_returns_422(client, account_id):
     response = client.get("/orders", params={"account_id": account_id})
 
     assert response.status_code == 422
+
+
+def test_order_for_missing_account_returns_404(client, order_payload, monkeypatch):
+    """Если сосед говорит, что клиента нет — возвращаем 404."""
+    # Подменяем ответ соседа на 404
+    answer = httpx.Response(404, request=httpx.Request("GET", "http://accounts"))
+    monkeypatch.setattr(httpx, "get", lambda url, timeout: answer)
+
+    response = client.post("/orders", json=order_payload)
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"]

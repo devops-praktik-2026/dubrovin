@@ -6,6 +6,7 @@
 
 from collections.abc import Iterator
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -40,3 +41,10 @@ def client() -> Iterator[TestClient]:
 @pytest.fixture()
 def order_payload() -> dict:
     return {"account_id": 1, "item": "Кофемолка", "quantity": 2}
+
+
+@pytest.fixture(autouse=True)
+def account_exists(monkeypatch):
+    """Во всех тестах считаем, что сосед ответил 200 OK."""
+    answer = httpx.Response(200, request=httpx.Request("GET", "http://accounts"))
+    monkeypatch.setattr(httpx, "get", lambda url, timeout: answer)
