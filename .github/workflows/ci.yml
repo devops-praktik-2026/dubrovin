@@ -58,7 +58,7 @@ jobs:
       - name: Прогнать тесты
         run: pytest --cov-report=term-missing
 
- integration:
+  integration:
     name: Тест связки
     runs-on: ubuntu-latest
     steps:
