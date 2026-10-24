@@ -23,7 +23,7 @@ dist/
 *.tfstate
 *.tfstate.*
 .terraform/
-.terraform.lock.hcl
+#.terraform.lock.hcl
 crash.log
 
 # Ключи доступа
