@@ -1,24 +1,81 @@
+---
+- name: Скопировать wheel на сервер
+  ansible.builtin.copy:
+    src: "{{ wheel_src }}"
+    dest: "{{ app_root }}/packages/{{ wheel_name }}"
+    owner: deploy
+    group: deploy
+    mode: "0644"
 
-# Что здесь должно появиться:
-#   - окружение Python в каталоге приложения
-#   - файл настроек из шаблона: адрес базы данных, адрес соседнего сервиса
-#   - описание службы для надзирателя в /etc/supervisor/conf.d/
-#   - перезапуск службы через обработчик, а не напрямую
-#
-# Проверка: после запуска сценария приложение отвечает на служебный запрос
-#     curl http://localhost:8101/health
-#
-# Полезное на сервере:
-#     supervisorctl status          что запущено
-#     supervisorctl restart orders  перезапустить службу
-#     supervisorctl tail -f orders  смотреть вывод
-#
-# Подсказка:
-#   ansible.builtin.pip        установка пакета в окружение
-#   ansible.builtin.template   файл настроек из шаблона
-#   ansible.builtin.copy       описание службы
-#   notify + handlers          перезапуск только когда что-то изменилось
+- name: Прочитать установленную версию, если venv существует
+  ansible.builtin.command:
+    argv:
+      - "{{ app_root }}/venv/bin/python"
+      - -c
+      - "from importlib.metadata import version; print(version('orders'))"
+  register: installed_orders
+  changed_when: false
+  failed_when: false
 
-- name: Заглушка, чтобы сценарий запускался до того, как вы его напишете
-  ansible.builtin.debug:
-    msg: "Роль app пока пустая."
+- name: Установить пакет в изолированное окружение
+  ansible.builtin.pip:
+    name: "{{ app_root }}/packages/{{ wheel_name }}"
+    virtualenv: "{{ app_root }}/venv"
+    virtualenv_command: /usr/bin/python3 -m venv
+    state: present
+  become_user: deploy
+  environment:
+    PIP_DEFAULT_TIMEOUT: '60'
+    PIP_RETRIES: '5'
+  when: installed_orders.rc != 0 or installed_orders.stdout != app_version
+  notify: Restart orders
+
+- name: Разложить файл настроек
+  ansible.builtin.template:
+    src: orders.env.j2
+    dest: "{{ app_root }}/.env"
+    owner: deploy
+    group: deploy
+    mode: "0600"
+  notify: Restart orders
+
+- name: Разложить описание службы Supervisor
+  ansible.builtin.template:
+    src: orders.conf.j2
+    dest: /etc/supervisor/conf.d/orders.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart orders
+
+- name: Применить обработчики до проверки здоровья
+  ansible.builtin.meta: flush_handlers
+
+- name: Убедиться, что служба запущена
+  community.general.supervisorctl:
+    name: orders
+    state: started
+
+- name: Дождаться ответа /health
+  ansible.builtin.uri:
+    url: http://127.0.0.1:8000/health
+    status_code: 200
+    return_content: true
+    timeout: 3
+  register: orders_health
+  until: >-
+    orders_health.status == 200
+    and (orders_health.json.status | default('')) == 'ok'
+  retries: 10
+  delay: 2
+  changed_when: false
+
+- name: Проверить установленную версию пакета
+  ansible.builtin.command:
+    argv:
+      - "{{ app_root }}/venv/bin/python"
+      - -c
+      - "from importlib.metadata import version; print(version('orders'))"
+  register: verified_orders
+  changed_when: false
+  failed_when: verified_orders.stdout != app_version

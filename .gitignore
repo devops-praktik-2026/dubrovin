@@ -35,3 +35,4 @@ id_rsa*
 .idea/
 .vscode/
 .DS_Store
+infra/ansible/inventory.ini

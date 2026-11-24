@@ -1,0 +1,11 @@
+[program:orders]
+directory={{ app_root }}
+command={{ app_root }}/venv/bin/uvicorn orders.main:app --host 0.0.0.0 --port 8000
+user=deploy
+environment=PYTHONUNBUFFERED="1"
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+stdout_logfile={{ app_root }}/orders.log
+stderr_logfile={{ app_root }}/orders-error.log
