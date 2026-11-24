@@ -1,26 +1,23 @@
-# Сценарий настройки серверов.
-#
-# Запуск:
-#     ansible-playbook -i inventory.ini site.yml
-#
-# Проверить связь до того, как что-то настраивать:
-#     ansible -i inventory.ini app -m ping
-#
-# Главное свойство хорошего сценария: его можно запустить второй раз,
-# и он ничего не изменит, потому что всё уже сделано. Проверяется просто —
-# во второй раз в итоговой строке должно быть changed=0.
-
+---
 - name: Настроить сервер под приложение
   hosts: app
   become: true
-
+  vars:
+    app_version: "0.1.0"
+    app_root: /opt/orders
+    wheel_name: "orders-{{ app_version }}-py3-none-any.whl"
+    # playbook_dir = infra/ansible → ../../ = корень репозитория
+    wheel_src: "{{ playbook_dir }}/../../dist/{{ wheel_name }}"
+    accounts_url: http://127.0.0.1:8001
+    partner_public_keys: []
+  pre_tasks:
+    - name: Запретить --check для этого сценария
+      ansible.builtin.assert:
+        that: not ansible_check_mode
+        fail_msg: "Используй --syntax-check; --check не поддерживается."
+    - name: Проверить формат версии
+      ansible.builtin.assert:
+        that: app_version is match('^[0-9]+\.[0-9]+\.[0-9]+$')
   roles:
-    - base   # пользователи, ключи доступа, системные зависимости
-    - app    # каталог приложения, окружение, настройки, служба
-
-  # ЗАДАНИЕ: наполните роли задачами. Начните с base/tasks/main.yml.
-  #
-  # Проверить себя: удалите стенд (tofu destroy), создайте заново (tofu apply)
-  # и запустите сценарий на чистых машинах. Если он отработал без ошибок —
-  # роли написаны правильно. Если пришлось что-то доделать руками, значит,
-  # это «что-то» нужно дописать в сценарий, а не оставлять в голове.
+    - base
+    - app
